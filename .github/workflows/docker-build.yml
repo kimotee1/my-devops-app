@@ -1,0 +1,60 @@
+name: Build, Test and Push Docker Image
+
+# Workflow-ი გაეშვება main ბრენჩზე push-ის დროს
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-test-push:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. კოდის ჩამოწერა repository-დან
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      # 2. Docker Hub-ში შესვლა
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      # 3. Docker image-ის აშენება და tag-ის მინიჭება
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/my-devops-app:latest .
+          echo "✅ Docker image built successfully!"
+      
+      # 4. Container-ის გაშვება ტესტირებისთვის
+      - name: Run Docker container for testing
+        run: docker run -d -p 8080:80 --name test-container ${{ secrets.DOCKER_USERNAME }}/my-devops-app:latest
+      
+      # 5. მოვიცადოთ, რომ nginx გაეშვას
+      - name: Wait for container to start
+        run: sleep 5
+      
+      # 6. შევამოწმოთ, რომ container მუშაობს
+      - name: Test container
+        run: |
+          curl -f http://localhost:8080 || exit 1
+          echo "✅ Container is running successfully!"
+      
+      # 7. Container-ის გაჩერება და წაშლა
+      - name: Stop and remove container
+        if: always()
+        run: |
+          docker stop test-container || true
+          docker rm test-container || true
+      
+      # 8. Docker image-ის გაგზავნა Docker Hub-ზე
+      - name: Push to Docker Hub
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/my-devops-app:latest
+          echo "🚀 Docker image pushed to Docker Hub successfully!"
+      
+      # 9. წარმატების შეტყობინება
+      - name: Success
+        run: echo "🎉 Build, test and push completed successfully!"
